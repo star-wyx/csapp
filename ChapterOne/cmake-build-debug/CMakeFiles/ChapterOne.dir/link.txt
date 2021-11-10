@@ -1,0 +1,3 @@
+"D:\programs\JetBrains\CLion 2021.2.1\bin\cmake\win\bin\cmake.exe" -E rm -f CMakeFiles\ChapterOne.dir/objects.a
+D:\programs\C++\mingw64\bin\ar.exe cr CMakeFiles\ChapterOne.dir/objects.a @CMakeFiles\ChapterOne.dir\objects1.rsp
+D:\programs\C++\mingw64\bin\gcc.exe -g -Wl,--whole-archive CMakeFiles\ChapterOne.dir/objects.a -Wl,--no-whole-archive -o ChapterOne.exe -Wl,--out-implib,libChapterOne.dll.a -Wl,--major-image-version,0,--minor-image-version,0 @CMakeFiles\ChapterOne.dir\linklibs.rsp
