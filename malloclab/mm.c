@@ -8,6 +8,9 @@
  *
  * NOTE TO STUDENTS: Replace this header comment with your own header
  * comment that gives a high level description of your solution.
+ *
+ * Implicit Linked List + First Fit
+ *
  */
 #include <stdio.h>
 #include <stdlib.h>
