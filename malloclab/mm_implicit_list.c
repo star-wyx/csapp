@@ -76,53 +76,32 @@ team_t team = {
 
 void *heap_head;
 void *heap_last;
-void *free_head;
-
-void set_free_list(void *bp) {
-    if (free_head == NULL) {
-        free_head = bp;
-        PUT(free_head + WSIZE, 0);
-    } else {
-        PUT(free_head, bp);
-        PUT(bp + WSIZE, free_head);
-        free_head = bp;
-    }
-}
 
 void place(void *bp, size_t asize) {
     size_t size = GET_SIZE(HDRP(bp));
-    void *prev_free = GET(bp);
-    void *next_free = GET(bp + WSIZE);
 
-    if ((size - asize) >= (2 * DSIZE)) {
+    if((size-asize)>=(2*DSIZE)){
         PUT(HDRP(bp), PACK(asize, 1));
         PUT(FTRP(bp), PACK(asize, 1));
         PUT(HDRP(NEXT_BLKP(bp)), PACK((size - asize), 0));
         PUT(FTRP(NEXT_BLKP(bp)), PACK((size - asize), 0));
-        bp = NEXT_BLKP(bp);
-        PUT(bp, prev_free);
-        PUT(bp + WSIZE, next_free);
-        PUT(prev_free + WSIZE, bp);
-        PUT(next_free, bp);
     } else {
         PUT(HDRP(bp), PACK(size, 1));
         PUT(FTRP(bp), PACK(size, 1));
-        PUT(prev_free + WSIZE, next_free);
-        PUT(next_free, prev_free);
     }
 
 }
 
 void *find(size_t asize) {
-    void *bp = free_head;
+    void *bp = heap_head;
     size_t size;
     size_t alloc;
-    while ((size = GET_SIZE(HDRP(bp))) > 0) {
+    while ((size = GET_SIZE(HDRP(NEXT_BLKP(bp)))) > 0) {
+        bp = NEXT_BLKP(bp);
         alloc = GET_ALLOC(HDRP(bp));
         if (alloc) continue;
         if (size >= asize)
             return bp;
-        bp = GET(bp + WSIZE);
     }
     return NULL;
 }
@@ -131,48 +110,23 @@ void *coalesce(void *bp) {
     size_t pre_alloc = GET_ALLOC(HDRP(PREV_BLKP(bp)));
     size_t next_alloc = GET_ALLOC(HDRP(NEXT_BLKP(bp)));
     size_t size = GET_SIZE(HDRP(bp));
-    void *prev_free;
-    void *next_free;
-
     if (pre_alloc && next_alloc) {
         return bp;
     } else if (pre_alloc && !next_alloc) {
         size += GET_SIZE(HDRP(NEXT_BLKP(bp)));
         PUT(HDRP(bp), PACK(size, 0));
         PUT(FTRP(bp), PACK(size, 0));
-
-        prev_free = GET(NEXT_BLKP(bp));
-        next_free = GET(NEXT_BLKP(bp) + WSIZE);
-
-//        PUT(bp,prev_free);
-//        PUT(bp+WSIZE,next_free);
-//        PUT(prev_free+WSIZE,bp);
-//        PUT(next_free,bp);
-        PUT(prev_free + WSIZE, next_free);
-        PUT(next_free, prev_free);
-
     } else if (!pre_alloc && next_alloc) {
         size += GET_SIZE(FTRP(PREV_BLKP(bp)));
         bp = PREV_BLKP(bp);
         PUT(HDRP(bp), PACK(size, 0));
         PUT(FTRP(bp), PACK(size, 0));
-
-        prev_free = GET(PREV_BLKP(bp));
-        next_free = GET(PREV_BLKP(bp) + WSIZE);
-        PUT(prev_free + WSIZE, next_free);
-        PUT(next_free, prev_free);
     } else {
         size = size + GET_SIZE(HDRP(NEXT_BLKP(bp))) + GET_SIZE(FTRP(PREV_BLKP(bp)));
         bp = PREV_BLKP(bp);
         PUT(HDRP(bp), PACK(size, 0));
         PUT(FTRP(bp), PACK(size, 0));
-
-        prev_free = GET(PREV_BLKP(bp));
-        next_free = GET(NEXT_BLKP(bp) + WSIZE);
-        PUT(prev_free + WSIZE, next_free);
-        PUT(next_free, prev_free);
     }
-    set_free_list(bp);
     return bp;
 }
 
@@ -201,7 +155,6 @@ int mm_init(void) {
     PUT(heap_head + 2 * WSIZE, PACK(DSIZE, 1));
     PUT(heap_head + 3 * WSIZE, PACK(0, 1));
     heap_head += 2 * WSIZE;
-
 
     if (expand_heap(CHUNKSIZE / WSIZE) == NULL)
         return -1;
