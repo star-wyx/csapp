@@ -1,6 +1,6 @@
 /*
  * mm-naive.c - The fastest, least memory-efficient malloc package.
- * 
+ *
  * In this naive approach, a block is allocated by simply incrementing
  * the brk pointer.  A block is pure payload. There are no headers or
  * footers.  Blocks are never coalesced or reused. Realloc is
@@ -72,6 +72,7 @@ team_t team = {
 #define PREV_BLKP(bp) ((char *)(bp) - GET_SIZE(((char *)(bp) - DSIZE)))
 
 void *heap_head;
+void *heap_last;
 
 void place(void *bp, size_t asize) {
     size_t size = GET_SIZE(HDRP(bp));
@@ -79,11 +80,11 @@ void place(void *bp, size_t asize) {
     if((size-asize)>=(2*DSIZE)){
         PUT(HDRP(bp), PACK(asize, 1));
         PUT(FTRP(bp), PACK(asize, 1));
-        PUT(HDRP(NEXT_BLKP(bp)),PACK((size-asize),0));
-        PUT(FTRP(NEXT_BLKP(bp)),PACK((size-asize),0));
-    }else{
-        PUT(HDRP(bp), PACK(asize, 1));
-        PUT(FTRP(bp), PACK(asize, 1));
+        PUT(HDRP(NEXT_BLKP(bp)), PACK((size - asize), 0));
+        PUT(FTRP(NEXT_BLKP(bp)), PACK((size - asize), 0));
+    } else {
+        PUT(HDRP(bp), PACK(size, 1));
+        PUT(FTRP(bp), PACK(size, 1));
     }
 
 }
@@ -92,7 +93,7 @@ void *find(size_t asize) {
     void *bp = heap_head;
     size_t size;
     size_t alloc;
-    while ((size = GET_SIZE(NEXT_BLKP(HDRP(bp)))) != 0) {
+    while ((size = GET_SIZE(HDRP(NEXT_BLKP(bp)))) > 0) {
         bp = NEXT_BLKP(bp);
         alloc = GET_ALLOC(HDRP(bp));
         if (alloc) continue;
@@ -135,11 +136,12 @@ void *expand_heap(size_t words) {
     PUT(FTRP(bp), PACK(words * WSIZE, 0));
     PUT(HDRP(NEXT_BLKP(bp)), PACK(0, 1));
 
+    heap_last = NEXT_BLKP(bp);
     return coalesce(bp);
 }
 
 
-/* 
+/*
  * mm_init - initialize the malloc package.
  */
 int mm_init(void) {
@@ -157,7 +159,7 @@ int mm_init(void) {
     return 0;
 }
 
-/* 
+/*
  * mm_malloc - Allocate a block by incrementing the brk pointer.
  *     Always allocate a block whose size is a multiple of the alignment.
  */
@@ -166,10 +168,10 @@ void *mm_malloc(size_t size) {
     size_t expandsize;
     void *bp;
 
-    if(size == 0)
+    if (size == 0)
         return NULL;
 
-    if (size < DSIZE)
+    if (size <= DSIZE)
         asize = 2 * DSIZE;
     else
 //        asize = size - size % DSIZE + 2 * DSIZE;
