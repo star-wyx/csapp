@@ -1,6 +1,6 @@
 /*
  *
- * Explicit Linked List + Next Fit
+ * segregated linked list
  *
  */
 #include <stdio.h>
@@ -66,10 +66,27 @@ team_t team = {
 #define NEXT_BLKP(bp) ((char *)(bp) + GET_SIZE(((char *)(bp) - WSIZE)))
 #define PREV_BLKP(bp) ((char *)(bp) - GET_SIZE(((char *)(bp) - DSIZE)))
 
+#define NUM_LISTS 10
+
 void *heap_head;
-void *free_head;
+//void *free_head;
+void *seglist[NUM_LISTS];
+
+int searchlist(size_t size) {
+    int res = 0;
+    if (size < 16) return 0;
+    if (size > 16384) return 9;
+    for (int i = 0; i < NUM_LISTS; i++) {
+        if (size >= (1 << (i + 4)) && size < (1 << (i + 5))) {
+            res = i;
+            break;
+        }
+    }
+    return res;
+}
 
 void take_out(void *bp) {
+    int n = searchlist(GET_SIZE(HDRP(bp)));
     void *prev = GET(bp);
     void *next = GET(bp + WSIZE);
     PUT(bp, 0);
@@ -79,50 +96,59 @@ void take_out(void *bp) {
         PUT(next, prev);
     } else if (prev == 0 && next != 0) {
         PUT(next, 0);
-        free_head = next;
+        seglist[n] = next;
     } else if (prev != 0 && next == 0) {
         PUT(prev + WSIZE, 0);
     } else if (prev == 0 && next == 0) {
-        free_head = 0;
+        seglist[n] = 0;
     }
 }
 
 void insert(void *bp) {
+    int n = searchlist(GET_SIZE(HDRP(bp)));
+    void *list = seglist[n];
     PUT(bp, 0);
-    PUT(bp + WSIZE, free_head);
-    if (free_head != 0) {
-        PUT(free_head, bp);
+    PUT(bp + WSIZE, list);
+    if (list != 0) {
+        PUT(list, bp);
     }
-    free_head = bp;
+    seglist[n] = bp;
 }
 
 void place(void *bp, size_t asize) {
     size_t size = GET_SIZE(HDRP(bp));
 
     if ((size - asize) >= (2 * DSIZE)) {
+//        void* next = NEXT_BLKP(bp);
+        take_out(bp);
         PUT(HDRP(bp), PACK(asize, 1));
         PUT(FTRP(bp), PACK(asize, 1));
         PUT(HDRP(NEXT_BLKP(bp)), PACK((size - asize), 0));
         PUT(FTRP(NEXT_BLKP(bp)), PACK((size - asize), 0));
-        take_out(bp);
         insert(NEXT_BLKP(bp));
     } else {
+        take_out(bp);
         PUT(HDRP(bp), PACK(size, 1));
         PUT(FTRP(bp), PACK(size, 1));
-        take_out(bp);
     }
 
 }
 
 void *find(size_t asize) {
-    void *bp = free_head;
+    int n = searchlist(asize);
+    void *list;
     size_t size;
-    size_t alloc;
-    while (bp != 0 && (size = GET_SIZE(HDRP(bp))) > 0) {
-        alloc = GET_ALLOC(HDRP(bp));
-        if (!alloc && size >= asize)
-            return bp;
-        bp = GET(bp + WSIZE);
+
+    for (int i = n; i < NUM_LISTS; i++) {
+        if (seglist[i] == 0)
+            continue;
+        list = seglist[i];
+        while (list != 0) {
+            size = GET_SIZE(HDRP(list));
+            if (size >= asize)
+                return list;
+            list = GET(list + WSIZE);
+        }
     }
     return NULL;
 }
@@ -182,9 +208,14 @@ int mm_init(void) {
     PUT(heap_head + 2 * WSIZE, PACK(DSIZE, 1));
     PUT(heap_head + 3 * WSIZE, PACK(0, 1));
     heap_head += 2 * WSIZE;
-    free_head = 0;
+//    free_head = 0;
+    for (int i = 0; i < NUM_LISTS; i++) {
+        seglist[i] = 0;
+    }
+
     if (expand_heap(CHUNKSIZE / WSIZE) == NULL)
         return -1;
+
 
     return 0;
 }
@@ -215,6 +246,7 @@ void *mm_malloc(size_t size) {
     expandsize = MAX(asize, CHUNKSIZE);
     if ((bp = expand_heap(expandsize / WSIZE)) == NULL)
         return NULL;
+    bp = find(asize);
     place(bp, asize);
     return bp;
 }
