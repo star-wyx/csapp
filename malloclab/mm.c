@@ -67,7 +67,6 @@ team_t team = {
 #define PREV_BLKP(bp) ((char *)(bp) - GET_SIZE(((char *)(bp) - DSIZE)))
 
 void *heap_head;
-void *heap_last;
 void *free_head;
 
 void take_out(void *bp) {
@@ -123,7 +122,7 @@ void *find(size_t asize) {
         alloc = GET_ALLOC(HDRP(bp));
         if (!alloc && size >= asize)
             return bp;
-        bp = NEXT_BLKP(bp);
+        bp = GET(bp + WSIZE);
     }
     return NULL;
 }
@@ -168,7 +167,6 @@ void *expand_heap(size_t words) {
     PUT(FTRP(bp), PACK(words * WSIZE, 0));
     PUT(HDRP(NEXT_BLKP(bp)), PACK(0, 1));
 
-    heap_last = NEXT_BLKP(bp);
     return coalesce(bp);
 }
 
