@@ -86,8 +86,8 @@ void place(void *bp, size_t asize) {
         PUT(HDRP(NEXT_BLKP(bp)), PACK((size - asize), 0));
         PUT(FTRP(NEXT_BLKP(bp)), PACK((size - asize), 0));
     } else {
-        PUT(HDRP(bp), PACK(asize, 1));
-        PUT(FTRP(bp), PACK(asize, 1));
+        PUT(HDRP(bp), PACK(size, 1));
+        PUT(FTRP(bp), PACK(size, 1));
     }
 
 }
@@ -225,17 +225,3 @@ void *mm_realloc(void *ptr, size_t size) {
     mm_free(oldptr);
     return newptr;
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-

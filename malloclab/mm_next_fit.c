@@ -9,7 +9,7 @@
  * NOTE TO STUDENTS: Replace this header comment with your own header
  * comment that gives a high level description of your solution.
  *
- * Implicit Linked List + First Fit
+ * Implicit Linked List + NEXT FIT
  *
  */
 #include <stdio.h>
@@ -51,7 +51,7 @@ team_t team = {
 /* Basic constants and macros */
 #define WSIZE 4 /* Word and header/footer size (bytes) */
 #define DSIZE 8 /* Double word size (bytes) */
-#define CHUNKSIZE (1<<11) /* Extend heap by this amount (bytes) */
+#define CHUNKSIZE (1<<12) /* Extend heap by this amount (bytes) */
 
 #define MAX(x, y) ((x) > (y)? (x) : (y))
 
@@ -61,7 +61,6 @@ team_t team = {
 /* Read and write a word at address p */
 #define GET(p) (*(unsigned int *)(p))
 #define PUT(p, val) (*(unsigned int *)(p) = (val))
-//#define PUT(p, val) (*(unsigned int *)(p) =(unsigned int *) (val))
 
 /* Read the size and allocated fields from address p */
 #define GET_SIZE(p) (GET(p) & ~0x7)
@@ -77,76 +76,45 @@ team_t team = {
 
 void *heap_head;
 void *heap_last;
-void *free_head;
-
-void update(void *bp, void *prev, void *next) {
-    if (bp != 0) {
-        if (prev != 0 && next != 0) {
-            PUT(bp, 0);
-            PUT(bp + WSIZE, free_head);
-            PUT(free_head, bp);
-            free_head = bp;
-            PUT(prev + WSIZE, next);
-            PUT(next, prev);
-        } else if (prev == 0 && next != 0) {
-            PUT(bp, 0);
-            PUT(bp + WSIZE, next);
-            PUT(next, bp);
-            free_head = bp;
-        } else if (prev != 0 && next == 0) {
-            PUT(bp, 0);
-            PUT(bp + WSIZE, free_head);
-            PUT(free_head, bp);
-            free_head = bp;
-            PUT(prev + WSIZE, 0);
-        } else if (prev == 0 && next == 0) {
-            PUT(bp, 0);
-            PUT(bp + WSIZE, 0);
-            free_head = bp;
-        }
-    }else{
-        if(prev!=0 && next!=0){
-            PUT(prev+DSIZE,next);
-            PUT(next,prev);
-        }else if(prev==0 && next!=0){
-            PUT(next,0);
-            free_head = next;
-        }else if(prev!=0 && next==0){
-            PUT(prev+DSIZE,0);
-        }else if(prev==0 && next==0){
-            free_head = 0;
-        }
-    }
-}
+void *current;
 
 void place(void *bp, size_t asize) {
     size_t size = GET_SIZE(HDRP(bp));
-    void *prev_free = GET(bp);
-    void *next_free = GET(bp + WSIZE);
 
-    if ((size - asize) >= (2 * DSIZE)) {
+    if((size-asize)>=(2*DSIZE)){
         PUT(HDRP(bp), PACK(asize, 1));
         PUT(FTRP(bp), PACK(asize, 1));
         PUT(HDRP(NEXT_BLKP(bp)), PACK((size - asize), 0));
         PUT(FTRP(NEXT_BLKP(bp)), PACK((size - asize), 0));
-        update(bp,prev_free,next_free);
     } else {
         PUT(HDRP(bp), PACK(size, 1));
         PUT(FTRP(bp), PACK(size, 1));
-        update(0,prev_free,next_free);
     }
 
+    current = bp;
 }
 
 void *find(size_t asize) {
-    void *bp = free_head;
+    void *bp = current;
     size_t size;
     size_t alloc;
-    while (bp!=0 && (size = GET_SIZE(HDRP(bp))) > 0) {
-        alloc = GET_ALLOC(HDRP(bp));
-        if (alloc && size >= asize)
-            return bp;
+    while ((size = GET_SIZE(HDRP(NEXT_BLKP(bp)))) > 0) {
         bp = NEXT_BLKP(bp);
+        alloc = GET_ALLOC(HDRP(bp));
+        if (alloc) continue;
+        if (size >= asize)
+            return bp;
+    }
+
+    bp = heap_head;
+
+    while (bp!=current) {
+        bp = NEXT_BLKP(bp);
+        alloc = GET_ALLOC(HDRP(bp));
+        if (alloc) continue;
+        size = GET_SIZE(HDRP(bp));
+        if (size >= asize)
+            return bp;
     }
     return NULL;
 }
@@ -156,29 +124,23 @@ void *coalesce(void *bp) {
     size_t next_alloc = GET_ALLOC(HDRP(NEXT_BLKP(bp)));
     size_t size = GET_SIZE(HDRP(bp));
     if (pre_alloc && next_alloc) {
-        update(bp,0,0);
+
     } else if (pre_alloc && !next_alloc) {
         size += GET_SIZE(HDRP(NEXT_BLKP(bp)));
-        update(0,GET(PREV_BLKP(bp)),GET(PREV_BLKP(bp)+WSIZE));
         PUT(HDRP(bp), PACK(size, 0));
         PUT(FTRP(bp), PACK(size, 0));
-        update(bp,0,0);
     } else if (!pre_alloc && next_alloc) {
         size += GET_SIZE(FTRP(PREV_BLKP(bp)));
-        update(0,GET(PREV_BLKP(bp)),GET(PREV_BLKP(bp)+WSIZE));
         bp = PREV_BLKP(bp);
         PUT(HDRP(bp), PACK(size, 0));
         PUT(FTRP(bp), PACK(size, 0));
-        update(bp,0,0);
     } else {
         size = size + GET_SIZE(HDRP(NEXT_BLKP(bp))) + GET_SIZE(FTRP(PREV_BLKP(bp)));
-        update(0,GET(PREV_BLKP(bp)),GET(PREV_BLKP(bp)+WSIZE));
-        update(0,GET(NEXT_BLKP(bp)),GET(NEXT_BLKP(bp)+WSIZE));
         bp = PREV_BLKP(bp);
         PUT(HDRP(bp), PACK(size, 0));
         PUT(FTRP(bp), PACK(size, 0));
-        update(bp,0,0);
     }
+    current = bp;
     return bp;
 }
 
@@ -190,7 +152,6 @@ void *expand_heap(size_t words) {
     PUT(HDRP(bp), PACK(words * WSIZE, 0));
     PUT(FTRP(bp), PACK(words * WSIZE, 0));
     PUT(HDRP(NEXT_BLKP(bp)), PACK(0, 1));
-
     heap_last = NEXT_BLKP(bp);
     return coalesce(bp);
 }
@@ -208,6 +169,7 @@ int mm_init(void) {
     PUT(heap_head + 3 * WSIZE, PACK(0, 1));
     heap_head += 2 * WSIZE;
 
+    current = heap_head;
     if (expand_heap(CHUNKSIZE / WSIZE) == NULL)
         return -1;
 
@@ -249,10 +211,8 @@ void *mm_malloc(size_t size) {
  */
 void mm_free(void *ptr) {
     size_t size = GET_SIZE(HDRP(ptr));
-    update(ptr, GET(ptr),GET(ptr+WSIZE));
     PUT(HDRP(ptr), PACK(size, 0));
     PUT(FTRP(ptr), PACK(size, 0));
-
     coalesce(ptr);
 }
 
@@ -279,17 +239,3 @@ void *mm_realloc(void *ptr, size_t size) {
     mm_free(oldptr);
     return newptr;
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
